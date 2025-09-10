@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Notion Pomodoro Logger</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #161a22;
+      --text: #eef2ff;
+      --muted: #9aa4b2;
+      --ring: rgba(110,168,254,.35);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      background: var(--bg);
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      padding: 18px;
+    }
+    .card {
+      width: 100%;
+      max-width: 560px;
+      background: #161a22;
+      border: 1px solid #1f2430;
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      position: relative;
+    }
+    h1 { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
+    p.sub { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
+    label { display:block; font-size:12px; color: var(--muted); margin-bottom:6px; }
+    .row { display:grid; gap:12px; margin-bottom:14px; }
+    select, input[type="number"], input[type="text"], input[type="password"] {
+      width: 100%; background:#0c0f14; color: var(--text);
+      border:1px solid #242b36; border-radius:10px; padding:10px 12px; outline:none; font-size:14px;
+    }
+    select:focus, input:focus { box-shadow: 0 0 0 3px var(--ring); }
+    .actions { display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:6px; }
+    button {
+      appearance:none; border:1px solid #2a3240; color:var(--text);
+      background: linear-gradient(180deg,#1b2330,#141923);
+      padding:12px 14px; border-radius:12px; font-weight:600; cursor:pointer;
+    }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .pill { display:inline-flex; align-items:center; gap:8px; padding:6px 10px;
+      border-radius:999px; font-size:12px; background:#0c131d; border:1px solid #1d2a3f; color:#9aa4b2; margin-top:8px; }
+    .pill.ok { border-color:#1f4230; color:#a7f3d0; background:#0b1610; }
+    .pill.err { border-color:#4a1f25; color:#fecaca; background:#170c0e; }
+    .timer { display:grid; place-items:center; width:100%; margin:14px 0 6px; padding:10px;
+      border-radius:12px; border:1px dashed #2a3240; color:#9aa4b2; font-variant-numeric: tabular-nums; }
+    .gear { position:absolute; top:10px; right:10px; background:#0d1420; border:1px solid #1e2a42;
+      width:36px; height:36px; border-radius:999px; display:grid; place-items:center; cursor:pointer; }
+    .gear svg { width:18px; height:18px; fill:#9aa4b2; }
+    .modal { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; place-items:center; padding:18px; }
+    .modal.active { display:grid; }
+    .sheet { width:100%; max-width:560px; background:#161a22; border:1px solid #252b38; border-radius:14px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.45); }
+    .sheet h2 { margin:0 0 8px; font-size:16px; }
+    .sheet .grid { display:grid; gap:10px; }
+    .sheet .row2 { display:grid; grid-template-columns: 1fr auto; gap:10px; align-items:end; }
+    .sheet .actions { margin-top:8px; display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; }
+    small.hint { color:#9aa4b2; font-size:12px; }
+  </style>
+
+  <!-- Build step can inject secrets here as window.RUNTIME (PUBLIC if used) -->
+  <!-- Example via GitHub Actions:
+  <script>
+    window.RUNTIME = { WEBHOOK_URL: "https://hook.make.com/...", API_KEY: "..." };
+  </script>
+  -->
+</head>
+<body>
+  <div class="card">
+    <button class="gear" id="gearBtn" title="Settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14,12.94a7.49,7.49,0,0,0,0-1.88l2-1.56a.5.5,0,0,0,.12-.64l-1.9-3.29a.5.5,0,0,0-.6-.22l-2.35,1a7.49,7.49,0,0,0-1.62-.94l-.36-2.49A.5.5,0,0,0,13,2H11a.5.5,0,0,0-.49.41L10.15,4.9a7.49,7.49,0,0,0-1.62.94l-2.35-1a.5.5,0,0,0-.6.22L3.68,8.35a.5.5,0,0,0,.12.64l2,1.56a7.49,7.49,0,0,0,0,1.88l-2,1.56a.5.5,0,0,0-.12.64l1.9,3.29a.5.5,0,0,0,.6.22l2.35-1a7.49,7.49,0,0,0,1.62.94l.36,2.49A.5.5,0,0,0,11,22h2a.5.5,0,0,0,.49-.41l.36-2.49a7.49,7.49,0,0,0,1.62-.94l2.35,1a.5.5,0,0,0,.6-.22l1.9-3.29a.5.5,0,0,0,.12-.64ZM12,15.5A3.5,3.5,0,1,1,15.5,12,3.5,3.5,0,0,1,12,15.5Z"/></svg>
+    </button>
+
+    <h1>Pomodoro Logger</h1>
+    <p class="sub">Select a task and click <b>Start</b>. When done, click <b>Stop & Log</b> to update Notion via Make.</p>
+
+    <div class="row">
+      <label for="task">Task</label>
+      <select id="task"></select>
+      <small class="hint">Provide tasks via Settings → Static JSON or a TASKS_API_URL endpoint.</small>
+    </div>
+
+    <div class="row">
+      <label for="length">Length (mins)</label>
+      <input type="number" id="length" min="1" step="1" value="25" />
+      <small class="hint">Local time: <span id="loc-time"></span></small>
+    </div>
+
+    <div class="timer"><span id="elapsed">00:00</span></div>
+
+    <div class="actions">
+      <button id="startBtn">Start</button>
+      <button id="stopBtn" disabled>Stop & Log</button>
+    </div>
+
+    <div id="status" class="pill" style="display:none;"></div>
+
+    <p class="sub" style="margin-top:14px;">
+      <small class="hint">Config priority: window.RUNTIME → URL params → Settings (localStorage). If you inject secrets at build-time, they are PUBLIC in the HTML.</small>
+    </p>
+  </div>
+
+  <!-- Settings modal -->
+  <div class="modal" id="settings">
+    <div class="sheet">
+      <h2>Settings</h2>
+      <div class="grid">
+        <div class="row">
+          <label for="wh">Make Webhook URL</label>
+          <input type="text" id="wh" placeholder="https://hook.make.com/XXXXXXXX" autocomplete="off" />
+        </div>
+        <div class="row2">
+          <div>
+            <label for="key">Make API Key (x-make-apikey)</label>
+            <input type="password" id="key" placeholder="Enter API key" autocomplete="new-password" />
+          </div>
+          <button id="reveal" class="pill" type="button" title="Show/Hide">👁️</button>
+        </div>
+        <div class="row">
+          <label for="tasks">Static Tasks JSON (optional)</label>
+          <input type="text" id="tasks" placeholder='[{"name":"Task A","pageId":"..."}]' />
+        </div>
+        <div class="row">
+          <label for="tasksApi">TASKS_API_URL (optional)</label>
+          <input type="text" id="tasksApi" placeholder="https://hook.make.com/list-tasks" />
+        </div>
+      </div>
+      <div class="actions">
+        <button id="save">Save</button>
+        <button id="clear">Clear</button>
+        <button id="close">Close</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+console.log('%cPomodoro Logger','color:#6ea8fe');
+
+// ----- Helpers
+function qs(k){ return new URLSearchParams(location.search).get(k); }
+const SKEY='pomodoro_settings_v2';
+function getSettings(){ try{ return JSON.parse(localStorage.getItem(SKEY)||'{}'); }catch{ return {}; } }
+function setSettings(o){ localStorage.setItem(SKEY, JSON.stringify(o||{})); }
+
+// ----- Elements
+const els = {
+  task: document.getElementById('task'),
+  length: document.getElementById('length'),
+  start: document.getElementById('startBtn'),
+  stop: document.getElementById('stopBtn'),
+  elapsed: document.getElementById('elapsed'),
+  status: document.getElementById('status'),
+  locTime: document.getElementById('loc-time'),
+  // settings
+  modal: document.getElementById('settings'),
+  gear: document.getElementById('gearBtn'),
+  wh: document.getElementById('wh'),
+  key: document.getElementById('key'),
+  tasks: document.getElementById('tasks'),
+  tasksApi: document.getElementById('tasksApi'),
+  reveal: document.getElementById('reveal'),
+  save: document.getElementById('save'),
+  clear: document.getElementById('clear'),
+  close: document.getElementById('close')
+};
+
+// ----- Load config precedence: runtime → URL → localStorage
+function loadConfig(){
+  const cfg = { webhook:'', key:'', tasks:'', tasksApi:'' };
+  if (window.RUNTIME){
+    cfg.webhook = window.RUNTIME.WEBHOOK_URL || '';
+    cfg.key = window.RUNTIME.API_KEY || '';
+  }
+  if (qs('webhook')) cfg.webhook = qs('webhook');
+  if (qs('key')) cfg.key = qs('key');
+  const s = getSettings();
+  cfg.webhook = cfg.webhook || s.webhook || '';
+  cfg.key = cfg.key || s.key || '';
+  cfg.tasks = s.tasks || '';
+  cfg.tasksApi = s.tasksApi || '';
+  return cfg;
+}
+let CFG = loadConfig();
+
+// ----- UI status
+function showStatus(text, ok=false){
+  els.status.style.display='inline-flex';
+  els.status.textContent=text;
+  els.status.className='pill '+(ok?'ok':'err');
+  setTimeout(()=>{ els.status.style.display='none'; }, 3500);
+}
+
+// ----- Tasks
+function populateTasks(list){
+  els.task.innerHTML='';
+  if(!list||list.length===0){
+    const opt=document.createElement('option');
+    opt.value=''; opt.textContent='No tasks configured. Open settings (gear).';
+    els.task.appendChild(opt); return;
+  }
+  for(const t of list){
+    const opt=document.createElement('option');
+    opt.value=t.pageId; opt.textContent=t.name;
+    els.task.appendChild(opt);
+  }
+}
+async function loadTasks(){
+  let staticList=[];
+  if (CFG.tasks){
+    try{ staticList = JSON.parse(CFG.tasks); }catch{ staticList=[]; }
+  }
+  if (CFG.tasksApi){
+    try{
+      const res = await fetch(CFG.tasksApi, {method:'GET'});
+      const data = await res.json();
+      populateTasks(data); return;
+    }catch(e){ console.warn('TASKS_API_URL fetch failed; falling back to static.'); }
+  }
+  populateTasks(staticList);
+}
+
+// ----- Timer
+let ticker=null, startAt=null;
+function pad(n){ return String(n).padStart(2,'0'); }
+function fmt(ms){ const m=Math.floor(ms/60000), s=Math.floor((ms%60000)/1000); return `${pad(m)}:${pad(s)}`; }
+function startTicker(){ stopTicker(); ticker=setInterval(()=>{ els.elapsed.textContent=fmt(new Date()-startAt); }, 250); }
+function stopTicker(){ if(ticker){ clearInterval(ticker); ticker=null; } }
+
+// Persist active so refresh doesn't kill it
+function saveActive(){
+  const s=getSettings(); s.active=s.active||{};
+  s.active.startAt = startAt?startAt.toISOString():null;
+  s.active.pageId = els.task.value||null;
+  s.active.length = Number(els.length.value||25);
+  setSettings(s);
+}
+function clearActive(){ const s=getSettings(); if(s.active){ delete s.active; setSettings(s); } }
+function restoreActive(){
+  const s=getSettings(); if(!s.active||!s.active.startAt) return;
+  const then=new Date(s.active.startAt), now=new Date();
+  if(now-then>6*60*60*1000){ clearActive(); return; }
+  startAt=then; els.task.value=s.active.pageId||''; els.length.value=s.active.length||25;
+  els.start.disabled=true; els.stop.disabled=false; startTicker();
+}
+
+// ----- Settings modal
+function openSettings(){ els.wh.value=CFG.webhook; els.key.value=CFG.key; els.tasks.value=CFG.tasks; els.tasksApi.value=CFG.tasksApi; els.modal.classList.add('active'); }
+function closeSettings(){ els.modal.classList.remove('active'); }
+els.gear.addEventListener('click', openSettings);
+els.close.addEventListener('click', closeSettings);
+els.reveal.addEventListener('click', ()=>{ els.key.type = els.key.type==='password'?'text':'password'; });
+els.save.addEventListener('click', ()=>{
+  const s=getSettings();
+  s.webhook=els.wh.value.trim(); s.key=els.key.value; s.tasks=els.tasks.value.trim(); s.tasksApi=els.tasksApi.value.trim();
+  setSettings(s); CFG=loadConfig(); loadTasks(); showStatus('Settings saved.', true); closeSettings();
+});
+els.clear.addEventListener('click', ()=>{ setSettings({}); CFG=loadConfig(); showStatus('Cleared. Reload page.', true); location.reload(); });
+
+// ----- Buttons
+els.start.addEventListener('click', ()=>{
+  if(!CFG.webhook||!CFG.key){ showStatus('Set Webhook & API key (gear) or via build/URL.', false); return; }
+  if(!els.task.value){ showStatus('Pick a task first.', false); return; }
+  startAt=new Date(); els.start.disabled=true; els.stop.disabled=false; startTicker(); saveActive(); showStatus('Started.', true);
+});
+els.stop.addEventListener('click', async ()=>{
+  if(!startAt){ showStatus('No active session.', false); return; }
+  const endAt=new Date(), pageId=els.task.value, name=els.task.options[els.task.selectedIndex]?.text||'';
+  const payload={ task_page_id:pageId, task_name:name, start_time:startAt.toISOString(), end_time:endAt.toISOString() };
+  try{
+    const res=await fetch(CFG.webhook, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'x-make-apikey':CFG.key },
+      body: JSON.stringify(payload),
+      credentials:'omit', cache:'no-store'
+    });
+    if(!res.ok){ const txt=await res.text(); showStatus('Make error: '+(txt||res.status), false); return; }
+    showStatus('Logged to Notion ✅', true);
+    stopTicker(); startAt=null; els.elapsed.textContent='00:00'; els.start.disabled=false; els.stop.disabled=true; clearActive();
+  }catch{ showStatus('Network error. Check webhook URL.', false); }
+});
+
+// clock
+setInterval(()=>{ els.locTime.textContent=new Date().toLocaleString(); }, 1000);
+
+// init
+loadTasks(); restoreActive();
+</script>
+</body>
+</html>
